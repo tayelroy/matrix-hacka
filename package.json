@@ -1,0 +1,32 @@
+{
+  "name": "jup-predict",
+  "version": "0.0.1",
+  "description": "High-frequency prediction gaming SDK for Jupiter Mobile V3",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "solana",
+    "jupiter",
+    "prediction",
+    "gaming"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@solana/web3.js": "^1.90.0",
+    "bs58": "^5.0.0",
+    "eventemitter3": "^5.0.1"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}
