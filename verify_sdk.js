@@ -1,4 +1,5 @@
-const { JupPredict, MARKET_EVENTS } = require('./dist/index.js');
+// Use current directory (package.json main)
+const { JupPredict, MARKET_EVENTS } = require('./dist/cjs/index.js');
 
 async function main() {
     console.log('--- Verifying Jup-Predict SDK ---');
