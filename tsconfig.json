@@ -1,26 +1,12 @@
 {
-    "compilerOptions": {
-        "skipLibCheck": true,
-        "incremental": true,
-        "tsBuildInfoFile": "./.tsbuildinfo",
-        "target": "ES2020",
-        "module": "CommonJS",
-        "lib": [
-            "ES2020",
-            "DOM"
-        ],
-        "declaration": true,
-        "strict": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "outDir": "./dist",
-        "rootDir": "./src"
-    },
-    "include": [
-        "src/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "**/*.test.ts"
-    ]
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2020",
+    "outDir": "dist/esm",
+    "declaration": true,
+    "skipLibCheck": true,
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"]
 }
