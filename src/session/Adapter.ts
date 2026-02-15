@@ -1,8 +1,10 @@
+import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+
 export interface JupiterAdapter {
     connect(): Promise<void>;
-    signTransaction(transaction: any): Promise<any>;
-    signAllTransactions(transactions: any[]): Promise<any[]>;
-    publicKey: any; // PublicKey
+    signTransaction<T extends VersionedTransaction>(transaction: T): Promise<T>;
+    signAllTransactions<T extends VersionedTransaction>(transactions: T[]): Promise<T[]>;
+    publicKey: PublicKey;
 }
 
 export interface SessionConfig {

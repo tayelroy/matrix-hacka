@@ -1,13 +1,15 @@
-import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
-import { JupiterAdapter, SessionConfig } from './Adapter';
+import { Keypair, PublicKey, Connection, VersionedTransaction } from '@solana/web3.js';
+import { JupiterAdapter, SessionConfig } from './Adapter.js';
 
 export class SessionManager {
     private sessionKey: Keypair | null = null;
-    private adapter: JupiterAdapter | null = null;
+    private connection: Connection;
     private config: SessionConfig;
+    private adapter!: JupiterAdapter;
 
-    constructor(config: SessionConfig) {
+    constructor(config: SessionConfig, connection: Connection) {
         this.config = config;
+        this.connection = connection;
     }
 
     /**
@@ -29,32 +31,34 @@ export class SessionManager {
         // 3. Request delegation (Handshake)
         // In a real implementation, this would build a transaction that delegates authority
         // to the sessionKey for the specific program and limits.
-        // For now, we simulate this handshake.
-
         console.log(`Requesting session delegation for Program: ${this.config.programId}`);
 
         return this.sessionKey.publicKey;
     }
 
     /**
-     * Signs a transaction using the ephemeral session key.
-     * Uses the session key if valid, otherwise falls back to the main adapter (or errors).
+     * Sign a VersionedTransaction using the wallet adapter.
+     * Used by PredictManager for the Jupiter Prediction API flow.
      */
-    async signAndSend(transaction: Transaction): Promise<string> {
-        if (!this.sessionKey) {
-            throw new Error('Session not initialized');
+    async signVersionedTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction> {
+        if (!this.adapter) {
+            throw new Error('Session not initialized — call initJupSession first');
         }
+        return this.adapter.signTransaction(transaction);
+    }
 
-        // In a real session key architecture, the transaction is signed by the session key.
-        // The program instruction verifies the session key is authorized.
-        transaction.partialSign(this.sessionKey);
-
-        // TODO: Serialize and send raw transaction or use connection
-        // For this SDK we might just return the signed tx or signature
-        return "signature_placeholder";
+    /**
+     * Get the wallet adapter (for PredictManager to use directly).
+     */
+    getAdapter(): JupiterAdapter | null {
+        return this.adapter ?? null;
     }
 
     getSessionPublicKey(): PublicKey | null {
         return this.sessionKey ? this.sessionKey.publicKey : null;
+    }
+
+    getConnection(): Connection {
+        return this.connection;
     }
 }
