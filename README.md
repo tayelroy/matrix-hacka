@@ -1,34 +1,6 @@
 # Jup-Predict SDK
 
-Jup-Predict is a high-performance TypeScript SDK designed for building prediction market applications on Solana via Jupiter Mobile V3. The toolkit provides streamlined session management and real-time market volatility analytics to enable high-frequency trading experiences.
-
----
-
-## Core Features
-
-* **Session Management**: Implements ephemeral session keys that allow users to pre-authorize trading limits. This enables a "one-tap" execution flow where subsequent trades do not require manual wallet approvals for every transaction.
-* **Market Impulse (MI) Engine**: A specialized analytics component that monitors order book health and liquidity depth. It calculates a normalized MI Score (0-100) based on bid-ask spreads and volume density to signal market volatility.
-* **Jupiter Integration**: Built to interface directly with Jupiter's liquidity oracles and Quote APIs for accurate price discovery and execution.
-
----
-
-## Technical Architecture
-
-### Impulse Engine
-
-The engine utilizes a polling mechanism to fetch real-time market data. It evaluates market state through:
-
-* **Spread Analysis**: Measuring the gap between bid and ask prices to determine liquidity overhead.
-* **Slippage Forecasting**: Using Jupiter Quote API data to calculate the potential price impact of trades.
-* **Event System**: Emits standardized events when market conditions shift from "Stable" to "Impulse" states.
-
-### Session Manager
-
-Designed for security and speed, the Session Manager handles:
-
-* **Delegation Handshake**: A one-time on-chain transaction that authorizes a temporary session key.
-* **Spending Limit Guardrails**: Enforces maximum spend and time-to-live (TTL) constraints defined by the developer.
-* **Partial Signing**: Automatically applies session key signatures to transactions before network submission.
+A developer-friendly wrapper around the **[Jupiter Prediction API](https://dev.jup.ag/docs/prediction)**. Integrate prediction markets into your app in minutes, not days.
 
 ---
 
@@ -36,48 +8,134 @@ Designed for security and speed, the Session Manager handles:
 
 ```bash
 npm install jup-predict
-
 ```
 
----
-
 ## Quick Start
-
-### Initialize the SDK
-
-Configure the SDK with a specific Program ID and your preferred RPC endpoint.
 
 ```typescript
 import { JupPredict } from 'jup-predict';
 
-const sdk = new JupPredict(
-  'YOUR_PROGRAM_ID',
-  'https://api.mainnet-beta.solana.com'
-);
-
+const sdk = new JupPredict({
+    apiKey: 'YOUR_API_KEY',       // from https://portal.jup.ag
+    rpcUrl: 'https://api.mainnet-beta.solana.com',
+});
 ```
 
-### Monitor Market Impulse
+---
 
-Listen for volatility changes to inform trading strategies.
+## Modules
+
+### `sdk.market` — Discover Events & Markets
 
 ```typescript
-sdk.market.on('impulse_update', (state) => {
-  console.log('Current MI Score:', state.impulseScore);
-  if (state.isSurge) {
-    console.log('High volatility detected.');
-  }
+// List trending crypto events (with embedded markets)
+const events = await sdk.market.listEvents({
+    category: 'crypto',
+    filter: 'trending',
+    includeMarkets: true,
 });
 
-sdk.market.startPolling(1000);
+// Search for specific topics
+const results = await sdk.market.searchEvents('solana', 10);
 
+// Get full market details (prices in micro-USD)
+const market = await sdk.market.getMarket('market-456');
+console.log(`YES: $${microUsdToUsd(market.buyYesPriceUsd)}`);
+
+// Get live orderbook
+const orderbook = await sdk.market.getOrderbook('market-456');
+
+// Check if trading is active
+const isActive = await sdk.market.isTradingActive();
 ```
 
-### Start a Trading Session
-
-Initialize a session to enable high-frequency execution without repeated wallet popups.
+### `sdk.predict` — Buy & Sell Contracts
 
 ```typescript
-const sessionPublicKey = await sdk.session.initJupSession(walletAdapter);
+import { microUsdToUsd } from 'jup-predict';
 
+// Set your wallet adapter
+sdk.predict.setAdapter(walletAdapter);
+
+// Buy YES contracts ($2.00)
+const result = await sdk.predict.buyYes({
+    marketId: 'market-456',
+    depositAmount: 2.00,
+});
+console.log('Tx:', result.signature);
+
+// Buy NO contracts
+await sdk.predict.buyNo({ marketId: 'market-456', depositAmount: 5.00 });
+
+// Wait for order to fill
+const status = await sdk.predict.waitForFill(result.orderPubkey);
+
+// Close a position
+await sdk.predict.closePosition(result.positionPubkey);
+
+// Close ALL positions
+await sdk.predict.closeAllPositions();
 ```
+
+### `sdk.stats` — Positions, Orders & History
+
+```typescript
+const pubkey = wallet.publicKey.toString();
+
+// Get all positions
+const positions = await sdk.stats.getPositions(pubkey);
+
+// Portfolio P&L summary (values in dollars)
+const summary = await sdk.stats.getPortfolioSummary(pubkey);
+console.log(`Total P&L: $${summary.totalPnlUsd.toFixed(2)}`);
+
+// Query orders & transaction history
+const orders = await sdk.stats.getOrders(pubkey);
+const history = await sdk.stats.getHistory(pubkey);
+```
+
+### Real-Time Market Impulse
+
+```typescript
+// Create a real-time monitor for a specific market
+const engine = sdk.createImpulseEngine('market-456');
+
+engine.on('impulse_update', (state) => {
+    console.log(`MI Score: ${state.impulseScore}/100`);
+    console.log(`Spread: ${(state.spread * 100).toFixed(2)}%`);
+});
+
+engine.on('market_expedition', (data) => {
+    console.log(`🚀 Surge! ${data.multiplier}x for ${data.duration}s`);
+});
+
+engine.startPolling(1000);
+```
+
+---
+
+## Architecture
+
+| Module | Developer API | Under the Hood |
+|---|---|---|
+| **`sdk.market`** | `listEvents()`, `getMarket()`, `getOrderbook()` | `GET /events`, `GET /markets/{id}`, `GET /orderbook/{id}` |
+| **`sdk.predict`** | `buyYes()`, `buyNo()`, `closePosition()` | `POST /orders` → sign → submit → confirm |
+| **`sdk.stats`** | `getPositions()`, `getPortfolioSummary()` | `GET /positions`, aggregation math |
+| **`ImpulseEngine`** | `on('impulse_update')`, `startPolling()` | Real-time orderbook polling + MI score |
+
+---
+
+## Session Keys (High-Frequency)
+
+For game-like experiences with rapid trades:
+
+```typescript
+const sessionKey = await sdk.session.initJupSession(walletAdapter);
+// Subsequent trades use the session key — no wallet popups
+```
+
+---
+
+## License
+
+ISC
