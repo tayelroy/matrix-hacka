@@ -1,9 +1,13 @@
 import { EventEmitter } from 'eventemitter3';
+import type { MarketManager } from './MarketManager.js';
+import type { JupMarket, JupOrderbook } from '../types.js';
+import { microUsdToUsd } from '../types.js';
 
 export interface MarketState {
     impulseScore: number; // 0-100
-    spread: number;
-    volume24h: number;
+    spread: number;       // YES buy-sell spread as a fraction (e.g. 0.03 = 3%)
+    volume24h: number;    // volume in USD
+    liquidity: number;    // liquidity in USD
     isSurge: boolean;
 }
 
@@ -14,20 +18,27 @@ export const MARKET_EVENTS = {
 
 export class ImpulseEngine extends EventEmitter {
     private isRunning: boolean = false;
-    private pollInterval: NodeJS.Timeout | null = null;
-    private connectionUrl: string = 'https://price.jup.ag/v6/price'; // Example endpoint
+    private pollInterval: ReturnType<typeof setInterval> | null = null;
+    private marketManager: MarketManager;
+    private marketId: string;
 
-    constructor() {
+    constructor(marketManager: MarketManager, marketId: string) {
         super();
+        this.marketManager = marketManager;
+        this.marketId = marketId;
     }
 
-    startPolling(intervalMs: number = 1000) {
+    /**
+     * Start polling the orderbook at a given interval.
+     * Emits `impulse_update` on every tick, and `market_expedition` during surges.
+     */
+    startPolling(intervalMs: number = 1000): void {
         if (this.isRunning) return;
         this.isRunning = true;
         this.pollInterval = setInterval(() => this.pollMarketData(), intervalMs);
     }
 
-    stopPolling() {
+    stopPolling(): void {
         this.isRunning = false;
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
@@ -35,49 +46,89 @@ export class ImpulseEngine extends EventEmitter {
         }
     }
 
-    private async pollMarketData() {
+    /**
+     * Change the market being monitored on the fly.
+     */
+    setMarketId(marketId: string): void {
+        this.marketId = marketId;
+    }
+
+    private async pollMarketData(): Promise<void> {
         try {
-            // Mocking data fetch for now as we don't have full API access in this env
-            // In real impl: fetch(this.connectionUrl + '?ids=SOL')
+            // Fetch real data from jupiter API
+            const [market, orderbook] = await Promise.all([
+                this.marketManager.getMarket(this.marketId),
+                this.marketManager.getOrderbook(this.marketId),
+            ]);
 
-            const mockSpread = Math.random() * 0.05; // 0-5% spread
-            const mockVolume = 1000000 + Math.random() * 500000;
-
-            const impulseScore = this.calculateImpulse(mockSpread, mockVolume);
+            const spread = this.calculateSpread(market);
+            const volume = microUsdToUsd(market.volumeUsd);
+            const liquidity = microUsdToUsd(market.liquidityUsd);
+            const depth = this.calculateDepth(orderbook);
+            const impulseScore = this.calculateImpulse(spread, volume, depth);
             const isSurge = impulseScore > 80;
 
             const state: MarketState = {
                 impulseScore,
-                spread: mockSpread,
-                volume24h: mockVolume,
-                isSurge
+                spread,
+                volume24h: volume,
+                liquidity,
+                isSurge,
             };
 
             this.emit(MARKET_EVENTS.IMPULSE_UPDATE, state);
 
             if (isSurge) {
                 this.emit(MARKET_EVENTS.MARKET_EXPEDITION, {
-                    multiplier: 2.0, // 2x rewards during surge
-                    duration: 60 // 60 seconds
+                    multiplier: 2.0,
+                    duration: 60,
                 });
             }
-
         } catch (error) {
-            console.error('Error polling market data:', error);
+            console.error('ImpulseEngine: Error polling market data:', error);
         }
     }
 
     /**
-     * Calculates the Market Impulse score (0-100) based on spread and volume.
-     * Higher spread + Higher volume = Higher Impulse (High Volatility)
+     * Calculate the bid-ask spread from buy/sell YES prices.
+     * Returns a fraction (e.g. 0.04 = 4% spread).
      */
-    public calculateImpulse(spread: number, volume: number): number {
-        // Normalize spread (e.g., 0.02 = 2% is considered high)
-        const spreadScore = Math.min((spread / 0.02) * 50, 50);
+    private calculateSpread(market: JupMarket): number {
+        const buyYes = parseInt(market.buyYesPriceUsd, 10);
+        const sellYes = parseInt(market.sellYesPriceUsd, 10);
 
-        // Normalize volume (arbitrary baseline)
-        const volumeScore = Math.min((volume / 1000000) * 50, 50);
+        if (sellYes === 0) return 0;
 
-        return Math.floor(spreadScore + volumeScore);
+        return (buyYes - sellYes) / sellYes;
+    }
+
+    /**
+     * Calculate total depth from the orderbook.
+     * Sums the quantity on both YES and NO sides.
+     */
+    private calculateDepth(orderbook: JupOrderbook): number {
+        let total = 0;
+        for (const [, qty] of orderbook.yes) total += qty;
+        for (const [, qty] of orderbook.no) total += qty;
+        return total;
+    }
+
+    /**
+     * Calculates the Market Impulse score (0-100).
+     * Higher spread + Higher volume + Lower depth = Higher Impulse (more volatile).
+     */
+    public calculateImpulse(spread: number, volume: number, depth: number = 0): number {
+        // Spread component: 2% spread -> ~50 points
+        const spreadScore = Math.min((spread / 0.02) * 35, 35);
+
+        // Volume component: $1M volume -> ~35 points
+        const volumeScore = Math.min((volume / 1_000_000) * 35, 35);
+
+        // Depth component: low depth increases score (thin orderbook = volatile)
+        // 50k contracts -> ~30 points of reduction; very thin (<1k) -> near 0 reduction
+        const depthPenalty = depth > 0 ? Math.min((depth / 50_000) * 30, 30) : 0;
+        const depthScore = 30 - depthPenalty;
+
+        return Math.floor(spreadScore + volumeScore + depthScore);
     }
 }
