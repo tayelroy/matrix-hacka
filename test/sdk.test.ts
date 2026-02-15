@@ -185,17 +185,29 @@ describe('JupPredict SDK', () => {
     // ── ImpulseEngine ────────────────────────────────────────────────────
 
     describe('impulse engine', () => {
-        it('should calculate impulse score deterministically', () => {
+        it('should calculate impulse score with 4 components', () => {
             const engine = sdk.createImpulseEngine('m1');
 
-            // 2% spread, $1M volume, 25k depth
-            const score1 = engine.calculateImpulse(0.02, 1_000_000, 25_000);
+            // 2% spread, $1M volume, 25k depth, 0.5% price impact
+            const score1 = engine.calculateImpulse(0.02, 1_000_000, 25_000, 0.005);
             expect(score1).toBeGreaterThan(0);
             expect(score1).toBeLessThanOrEqual(100);
+        });
 
-            // 0% spread, $0 volume, 0 depth => should be 30 (from depth component)
-            const score2 = engine.calculateImpulse(0, 0, 0);
-            expect(score2).toBe(30);
+        it('should return 25 with all zeros (depth component only)', () => {
+            const engine = sdk.createImpulseEngine('m1');
+
+            // 0% spread, $0 volume, 0 depth, 0 impact => 25 (depth score only)
+            const score = engine.calculateImpulse(0, 0, 0, 0);
+            expect(score).toBe(25);
+        });
+
+        it('should score high with large price impact', () => {
+            const engine = sdk.createImpulseEngine('m1');
+
+            // 3% spread, $2M volume, thin orderbook, 1% price impact → near max
+            const score = engine.calculateImpulse(0.03, 2_000_000, 100, 0.01);
+            expect(score).toBeGreaterThanOrEqual(90);
         });
     });
 

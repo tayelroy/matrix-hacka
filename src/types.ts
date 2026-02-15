@@ -221,6 +221,28 @@ export interface PredictResult {
     positionPubkey: string;
 }
 
+// ─── Jupiter Swap Quote (for ImpulseEngine) ─────────────────────────────────
+
+export interface JupQuoteResponse {
+    inputMint: string;
+    inAmount: string;
+    outputMint: string;
+    outAmount: string;
+    otherAmountThreshold: string;
+    swapMode: 'ExactIn' | 'ExactOut';
+    slippageBps: number;
+    priceImpactPct: string;         // e.g. "0.0001" — the key signal
+    routePlan: unknown[];
+    contextSlot: number;
+    timeTaken: number;
+}
+
+export interface ImpulseConfig {
+    probeInputMint?: string;        // default: USDC mint
+    probeOutputMint?: string;       // default: wrapped SOL
+    probeAmount?: string;           // default: "10000000" (10 USDC, 6 decimals)
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const JUPUSD_MINT = 'JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD';

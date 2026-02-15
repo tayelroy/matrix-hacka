@@ -28,7 +28,7 @@ import { ImpulseEngine, MARKET_EVENTS, type MarketState } from './market/Impulse
 import { PredictManager } from './predict/PredictManager.js';
 import { StatsManager } from './stats/StatsManager.js';
 import { SessionManager } from './session/SessionManager.js';
-import type { JupPredictConfig } from './types.js';
+import type { JupPredictConfig, ImpulseConfig } from './types.js';
 
 export const version = '0.1.0';
 
@@ -51,7 +51,11 @@ export class JupPredict {
     /** Internal API client. */
     private api: ApiClient;
 
+    /** Internal API key (shared with ImpulseEngine for Quote API). */
+    private apiKey: string;
+
     constructor(config: JupPredictConfig) {
+        this.apiKey = config.apiKey;
         this.api = new ApiClient(config.apiKey);
         this.connection = new Connection(
             config.rpcUrl ?? 'https://api.mainnet-beta.solana.com',
@@ -74,11 +78,13 @@ export class JupPredict {
      *
      * @example
      * const engine = sdk.createImpulseEngine('market-456');
-     * engine.on('impulse_update', (state) => console.log(state.impulseScore));
+     * engine.on('impulse_update', (state) => {
+     *     console.log(`MI: ${state.impulseScore}, Impact: ${state.priceImpactPct}`);
+     * });
      * engine.startPolling(1000);
      */
-    createImpulseEngine(marketId: string): ImpulseEngine {
-        return new ImpulseEngine(this.market, marketId);
+    createImpulseEngine(marketId: string, impulseConfig?: ImpulseConfig): ImpulseEngine {
+        return new ImpulseEngine(this.market, marketId, this.apiKey, impulseConfig);
     }
 
     /**
